@@ -21,12 +21,32 @@ if [ -z "$data" ]; then
   helpFunction
 fi
 
+# Guard: abort if the active `python` is not CPython. conda-forge's `openjdk`
+# used to resolve to a GraalVM build whose post-link step replaced
+# `$CONDA_PREFIX/bin/python` with GraalPy, breaking every CPython C-extension
+# (numpy, regex, jnius, ...). See `zulu-openjdk` pin below.
+impl=$(python -c "import sys; print(sys.implementation.name)")
+if [ "$impl" != "cpython" ]; then
+  echo "[ERROR]: active python is '$impl', expected 'cpython'."
+  echo "         Recreate the env: conda env remove -n webshop && \\"
+  echo "                           conda create -n webshop python=3.8 -y"
+  exit 1
+fi
+
 # Install Python Dependencies
 pip install -r requirements.txt;
 
 # Install Environment Dependencies via `conda`
-conda install -c pytorch faiss-cpu;
-conda install -c conda-forge openjdk=11;
+# The pytorch-channel `faiss-cpu` is linked against `libmkl_intel_lp64.so.1`,
+# but conda-forge's current `mkl` (>=2023) only ships `.so.2` — an ABI
+# mismatch that hides behind a vague `ImportError` at `import faiss`.
+# conda-forge's `faiss-cpu` is OpenBLAS-linked and sidesteps MKL entirely.
+conda install -c conda-forge faiss-cpu -y;
+# conda-forge's `openjdk=11` resolves to a GraalVM build whose post-link
+# script overwrites `$CONDA_PREFIX/bin/python` with GraalPy, breaking every
+# CPython C-extension (numpy, regex, jnius, ...). Conda-forge `openjdk=21`
+# is a stock HotSpot JDK — pyserini/Lucene 9 runs fine on 21.
+conda install -c conda-forge openjdk=21 -y;
 
 # Download dataset into `data` folder via `gdown` command
 mkdir -p data;
