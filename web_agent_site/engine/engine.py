@@ -340,7 +340,12 @@ def load_products(filepath, num_products=None, human_goals=True):
             
         if human_goals:
             if asin in human_attributes:
-                products[i]['instructions'] = human_attributes[asin]
+                seen_instructions = set()
+                products[i]['instructions'] = [
+                    entry for entry in human_attributes[asin]
+                    if entry['instruction'] not in seen_instructions
+                    and not seen_instructions.add(entry['instruction'])
+                ]
         else:
             products[i]['instruction_text'] = \
                 attributes[asin].get('instruction', None)
